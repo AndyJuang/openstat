@@ -1,0 +1,7 @@
+.build/
+*.o
+*.d
+OpenStat.app/
+Assets/AppIcon.iconset/
+*.icns
+.DS_Store
