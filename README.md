@@ -1,7 +1,7 @@
 # OpenStat
 
 <p align="center">
-  <img src="Assets/AppIcon.iconset/icon_128x128.png" width="128" alt="OpenStat icon">
+  <img src="Assets/icon.png" width="128" alt="OpenStat icon">
 </p>
 
 <p align="center">
