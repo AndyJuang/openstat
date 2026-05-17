@@ -32,10 +32,10 @@ class StatusBarController: NSObject, NSMenuDelegate {
 
     private func setupPopover() {
         let content = NSHostingController(rootView: ContentView(monitor: monitor))
-        content.view.frame = NSRect(x: 0, y: 0, width: 300, height: 360)
+        content.view.frame = NSRect(x: 0, y: 0, width: 320, height: 520)
 
         popover.contentViewController = content
-        popover.contentSize = NSSize(width: 300, height: 360)
+        popover.contentSize = NSSize(width: 320, height: 520)
         popover.behavior    = .transient
         popover.animates    = true
     }
@@ -55,7 +55,41 @@ class StatusBarController: NSObject, NSMenuDelegate {
         let mem = shortBytes(monitor.memoryUsed)
         let up  = shortSpeed(monitor.networkUpload)
         let dn  = shortSpeed(monitor.networkDownload)
-        statusItem.button?.title = "\(cpu) \(mem) ↑\(up) ↓\(dn)"
+
+        var parts = [cpu]
+        if showGPU && monitor.gpuAvailable {
+            parts.append("G" + String(format: "%2.0f%%", monitor.gpuUsage))
+        }
+        parts.append(mem)
+        if showDiskIO {
+            parts.append("D↑\(shortSpeed(monitor.diskWriteRate))")
+            parts.append("D↓\(shortSpeed(monitor.diskReadRate))")
+        }
+        parts.append("↑\(up)")
+        parts.append("↓\(dn)")
+        if showBattery && monitor.battery.present {
+            parts.append("\(monitor.battery.percent)%" + (monitor.battery.isCharging ? "⚡" : ""))
+        }
+        statusItem.button?.title = parts.joined(separator: " ")
+    }
+
+    // MARK: - 顯示偏好（持久化）
+
+    private let kShowGPU     = "openstat.menubar.showGPU"
+    private let kShowDiskIO  = "openstat.menubar.showDiskIO"
+    private let kShowBattery = "openstat.menubar.showBattery"
+
+    private var showGPU: Bool {
+        get { UserDefaults.standard.object(forKey: kShowGPU) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: kShowGPU) }
+    }
+    private var showDiskIO: Bool {
+        get { UserDefaults.standard.object(forKey: kShowDiskIO) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: kShowDiskIO) }
+    }
+    private var showBattery: Bool {
+        get { UserDefaults.standard.object(forKey: kShowBattery) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: kShowBattery) }
     }
 
     @objc private func handleClick(_ sender: NSStatusBarButton) {
@@ -84,8 +118,19 @@ class StatusBarController: NSObject, NSMenuDelegate {
     private func showContextMenu() {
         let menu = NSMenu()
 
-        let loginTitle = "登入時自動啟動"
-        let loginItem  = NSMenuItem(title: loginTitle, action: #selector(toggleLoginItem), keyEquivalent: "")
+        // 顯示項目子選單
+        let displayMenu = NSMenu()
+        addToggle(menu: displayMenu, title: "GPU 使用率",  selector: #selector(toggleGPU),     on: showGPU)
+        addToggle(menu: displayMenu, title: "磁碟讀寫速率", selector: #selector(toggleDiskIO),  on: showDiskIO)
+        addToggle(menu: displayMenu, title: "電池電量",    selector: #selector(toggleBattery), on: showBattery)
+
+        let displayItem = NSMenuItem(title: "Menu Bar 顯示", action: nil, keyEquivalent: "")
+        displayItem.submenu = displayMenu
+        menu.addItem(displayItem)
+
+        menu.addItem(.separator())
+
+        let loginItem  = NSMenuItem(title: "登入時自動啟動", action: #selector(toggleLoginItem), keyEquivalent: "")
         loginItem.target = self
         loginItem.state  = (SMAppService.mainApp.status == .enabled) ? .on : .off
         menu.addItem(loginItem)
@@ -97,6 +142,17 @@ class StatusBarController: NSObject, NSMenuDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
     }
+
+    private func addToggle(menu: NSMenu, title: String, selector: Selector, on: Bool) {
+        let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+        item.target = self
+        item.state  = on ? .on : .off
+        menu.addItem(item)
+    }
+
+    @objc private func toggleGPU()     { showGPU     = !showGPU;     refreshStatusBar() }
+    @objc private func toggleDiskIO()  { showDiskIO  = !showDiskIO;  refreshStatusBar() }
+    @objc private func toggleBattery() { showBattery = !showBattery; refreshStatusBar() }
 
     func menuDidClose(_ menu: NSMenu) {
         // 還原 nil，讓左鍵繼續顯示 popover

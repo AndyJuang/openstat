@@ -13,7 +13,11 @@ let package = Package(
         .executableTarget(
             name: "OpenStat",
             dependencies: ["OpenStatC"],
-            path: "Sources/OpenStat"
+            path: "Sources/OpenStat",
+            linkerSettings: [
+                .linkedFramework("IOKit"),
+                .linkedFramework("CoreFoundation")
+            ]
         )
     ]
 )
