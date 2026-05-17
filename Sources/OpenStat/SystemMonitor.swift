@@ -2,6 +2,33 @@ import Foundation
 import Darwin
 import OpenStatC
 
+struct VolumeUsage: Identifiable {
+    let id: String          // mount point
+    let name: String
+    let total: UInt64
+    let free: UInt64
+    var used: UInt64 { total > free ? total - free : 0 }
+    var ratio: Double { total > 0 ? Double(used) / Double(total) : 0 }
+}
+
+struct BatterySnapshot {
+    let present: Bool
+    let percent: Int
+    let isCharging: Bool
+    let isPluggedIn: Bool
+    let timeToEmptyMin: Int   // -1 = N/A
+    let timeToFullMin: Int    // -1 = N/A
+    let powerWatts: Double
+    let cycleCount: Int
+}
+
+struct ProcessRow: Identifiable {
+    let id: Int32         // pid
+    let name: String
+    let cpuPercent: Double
+    let residentBytes: UInt64
+}
+
 class SystemMonitor: ObservableObject {
     @Published var cpuUsage: Double = 0
     @Published var cpuCores: [Double] = []
@@ -13,21 +40,58 @@ class SystemMonitor: ObservableObject {
     @Published var networkUpload: Double = 0
     @Published var networkDownload: Double = 0
 
+    // 磁碟
+    @Published var diskReadRate: Double = 0
+    @Published var diskWriteRate: Double = 0
+    @Published var volumes: [VolumeUsage] = []
+
+    // GPU
+    @Published var gpuAvailable: Bool = false
+    @Published var gpuUsage: Double = 0
+    @Published var gpuMemoryMB: Double = 0
+
+    // 電池
+    @Published var battery: BatterySnapshot = BatterySnapshot(
+        present: false, percent: 0, isCharging: false, isPluggedIn: false,
+        timeToEmptyMin: -1, timeToFullMin: -1, powerWatts: 0, cycleCount: 0)
+
+    // Top Process
+    @Published var topByCPU: [ProcessRow] = []
+    @Published var topByMemory: [ProcessRow] = []
+
     private var previousCPUTicks: [Int32] = []
     private var previousBytesIn: UInt64 = 0
     private var previousBytesOut: UInt64 = 0
     private var lastNetworkTime: Date = Date()
 
+    private var previousDiskRead: UInt64 = 0
+    private var previousDiskWrite: UInt64 = 0
+    private var lastDiskTime: Date = Date()
+
+    // pid -> 上次 CPU 累計時間 (ns)
+    private var previousProcCPU: [Int32: UInt64] = [:]
+    private var lastProcessTime: Date = Date()
+
+    private let coreCount = Double(ProcessInfo.processInfo.activeProcessorCount)
+
     init() {
         let stats = getNetworkStats()
         previousBytesIn = stats.bytesIn
         previousBytesOut = stats.bytesOut
+
+        let io = getDiskIOStats()
+        previousDiskRead  = io.bytesRead
+        previousDiskWrite = io.bytesWritten
     }
 
     func update() {
         updateCPU()
         updateMemory()
         updateNetwork()
+        updateDisk()
+        updateGPU()
+        updateBattery()
+        updateProcesses()
     }
 
     private func updateCPU() {
@@ -122,5 +186,123 @@ class SystemMonitor: ObservableObject {
         previousBytesIn  = stats.bytesIn
         previousBytesOut = stats.bytesOut
         lastNetworkTime  = now
+    }
+
+    // MARK: - Disk
+
+    private func updateDisk() {
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastDiskTime)
+
+        let io = getDiskIOStats()
+        if elapsed > 0 {
+            let r = io.bytesRead     >= previousDiskRead  ? io.bytesRead     - previousDiskRead  : 0
+            let w = io.bytesWritten  >= previousDiskWrite ? io.bytesWritten  - previousDiskWrite : 0
+            diskReadRate  = Double(r) / elapsed
+            diskWriteRate = Double(w) / elapsed
+        }
+        previousDiskRead  = io.bytesRead
+        previousDiskWrite = io.bytesWritten
+        lastDiskTime      = now
+
+        var buf = Array(repeating: DiskVolumeInfo(), count: 8)
+        let count = Int(buf.withUnsafeMutableBufferPointer { ptr -> Int32 in
+            getDiskVolumes(ptr.baseAddress, Int32(ptr.count))
+        })
+
+        var vols: [VolumeUsage] = []
+        for i in 0..<count {
+            var v = buf[i]
+            let mount: String = withUnsafePointer(to: &v.mountPoint) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: 256) { String(cString: $0) }
+            }
+            let name: String = withUnsafePointer(to: &v.name) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: 128) { String(cString: $0) }
+            }
+            vols.append(VolumeUsage(id: mount, name: name, total: v.totalBytes, free: v.freeBytes))
+        }
+        // 根目錄優先，其餘按容量排
+        volumes = vols.sorted { a, b in
+            if a.id == "/" { return true }
+            if b.id == "/" { return false }
+            return a.total > b.total
+        }
+    }
+
+    // MARK: - GPU
+
+    private func updateGPU() {
+        let stats = getGPUStats()
+        gpuAvailable = stats.available
+        gpuUsage     = stats.utilization
+        gpuMemoryMB  = stats.deviceMemMB
+    }
+
+    // MARK: - Battery
+
+    private func updateBattery() {
+        let b = getBatteryInfo()
+        battery = BatterySnapshot(
+            present: b.present,
+            percent: Int(b.percent),
+            isCharging: b.isCharging,
+            isPluggedIn: b.isPluggedIn,
+            timeToEmptyMin: Int(b.timeToEmptyMin),
+            timeToFullMin: Int(b.timeToFullMin),
+            powerWatts: b.powerWatts,
+            cycleCount: Int(b.cycleCount)
+        )
+    }
+
+    // MARK: - Top Process
+
+    private func updateProcesses() {
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastProcessTime)
+        lastProcessTime = now
+
+        let cap = 512
+        var buf = Array(repeating: ProcessSample(), count: cap)
+        let n = Int(buf.withUnsafeMutableBufferPointer { ptr -> Int32 in
+            sampleProcesses(ptr.baseAddress, Int32(ptr.count))
+        })
+        guard n > 0 else { return }
+
+        var current: [Int32: UInt64] = [:]
+        var rows: [ProcessRow] = []
+        rows.reserveCapacity(n)
+
+        let elapsedNs = max(elapsed, 0.001) * 1_000_000_000
+        let firstSample = previousProcCPU.isEmpty
+
+        for i in 0..<n {
+            var s = buf[i]
+            let pid = Int32(s.pid)
+            current[pid] = s.cpuTimeNs
+
+            let cpuPct: Double
+            if firstSample {
+                cpuPct = 0
+            } else if let prev = previousProcCPU[pid], s.cpuTimeNs >= prev {
+                cpuPct = Double(s.cpuTimeNs - prev) / elapsedNs * 100.0
+            } else {
+                cpuPct = 0
+            }
+
+            let name: String = withUnsafePointer(to: &s.name) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: 64) { String(cString: $0) }
+            }
+
+            rows.append(ProcessRow(
+                id: pid,
+                name: name.isEmpty ? "pid \(pid)" : name,
+                cpuPercent: cpuPct,
+                residentBytes: s.residentBytes
+            ))
+        }
+
+        previousProcCPU = current
+        topByCPU    = Array(rows.sorted { $0.cpuPercent    > $1.cpuPercent    }.prefix(5))
+        topByMemory = Array(rows.sorted { $0.residentBytes > $1.residentBytes }.prefix(5))
     }
 }

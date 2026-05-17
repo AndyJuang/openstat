@@ -2,6 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var monitor: SystemMonitor
+    @State private var topMode: TopMode = .cpu
+
+    enum TopMode: String, CaseIterable { case cpu = "CPU", memory = "記憶體" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -11,12 +14,16 @@ struct ContentView: View {
                 VStack(spacing: 10) {
                     cpuSection
                     memorySection
+                    if monitor.gpuAvailable { gpuSection }
                     networkSection
+                    diskSection
+                    if monitor.battery.present { batterySection }
+                    topProcessSection
                 }
                 .padding(12)
             }
         }
-        .frame(width: 300)
+        .frame(width: 320, height: 520)
     }
 
     // MARK: - Header
@@ -118,6 +125,108 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - GPU
+
+    private var gpuSection: some View {
+        StatCard(title: "GPU", icon: "display") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("使用率").font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                    Text(String(format: "%.1f%%", monitor.gpuUsage))
+                        .font(.caption)
+                        .foregroundColor(usageColor(monitor.gpuUsage, high: 80, mid: 50))
+                        .monospacedDigit()
+                }
+                ProgressView(value: min(monitor.gpuUsage, 100), total: 100)
+                    .tint(usageColor(monitor.gpuUsage, high: 80, mid: 50))
+                if monitor.gpuMemoryMB > 0 {
+                    HStack {
+                        Text("配置記憶體").font(.system(size: 9)).foregroundColor(.secondary)
+                        Spacer()
+                        Text(String(format: "%.0f MB", monitor.gpuMemoryMB))
+                            .font(.system(size: 9))
+                            .monospacedDigit()
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Disk
+
+    private var diskSection: some View {
+        StatCard(title: "磁碟", icon: "internaldrive") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 0) {
+                    NetStat(direction: "arrow.up.circle",  label: "寫入",
+                            value: formatSpeed(monitor.diskWriteRate), color: .pink)
+                    Divider().frame(height: 36)
+                    NetStat(direction: "arrow.down.circle", label: "讀取",
+                            value: formatSpeed(monitor.diskReadRate),  color: .teal)
+                }
+                ForEach(monitor.volumes.prefix(3)) { vol in
+                    VolumeRow(vol: vol, ratioColor: ratioColor)
+                }
+            }
+        }
+    }
+
+    // MARK: - Battery
+
+    private var batterySection: some View {
+        StatCard(title: "電池", icon: batteryIcon(monitor.battery)) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("\(monitor.battery.percent)%")
+                        .font(.title3)
+                        .monospacedDigit()
+                        .foregroundColor(batteryColor(monitor.battery))
+                    Spacer()
+                    Text(batteryStateText(monitor.battery))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                ProgressView(value: Double(monitor.battery.percent), total: 100)
+                    .tint(batteryColor(monitor.battery))
+                HStack(spacing: 12) {
+                    if monitor.battery.powerWatts > 0 {
+                        MemLabel(color: .yellow, label: "功率",
+                                 value: String(format: "%.1f W", monitor.battery.powerWatts))
+                    }
+                    if monitor.battery.cycleCount > 0 {
+                        MemLabel(color: .gray, label: "循環",
+                                 value: "\(monitor.battery.cycleCount)")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    // MARK: - Top Process
+
+    private var topProcessSection: some View {
+        StatCard(title: "行程排行", icon: "list.bullet.rectangle") {
+            VStack(alignment: .leading, spacing: 6) {
+                Picker("", selection: $topMode) {
+                    ForEach(TopMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.mini)
+
+                let rows = topMode == .cpu ? monitor.topByCPU : monitor.topByMemory
+                if rows.isEmpty {
+                    Text("收集中…").font(.caption).foregroundColor(.secondary)
+                } else {
+                    ForEach(rows) { row in
+                        ProcessRowView(row: row, mode: topMode)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func usageColor(_ v: Double, high: Double, mid: Double) -> Color {
@@ -126,6 +235,91 @@ struct ContentView: View {
 
     private func ratioColor(_ r: Double) -> Color {
         r > 0.9 ? .red : r > 0.7 ? .orange : .blue
+    }
+
+    private func batteryColor(_ b: BatterySnapshot) -> Color {
+        if b.isCharging || b.isPluggedIn { return .green }
+        if b.percent <= 10 { return .red }
+        if b.percent <= 20 { return .orange }
+        return .blue
+    }
+
+    private func batteryIcon(_ b: BatterySnapshot) -> String {
+        if b.isCharging { return "battery.100.bolt" }
+        switch b.percent {
+        case 0...10:  return "battery.0"
+        case 11...35: return "battery.25"
+        case 36...60: return "battery.50"
+        case 61...85: return "battery.75"
+        default:      return "battery.100"
+        }
+    }
+
+    private func batteryStateText(_ b: BatterySnapshot) -> String {
+        if b.isCharging {
+            if b.timeToFullMin > 0 { return "充電中 · 剩 \(formatMin(b.timeToFullMin))" }
+            return "充電中"
+        }
+        if b.isPluggedIn { return "已接電源" }
+        if b.timeToEmptyMin > 0 { return "剩 \(formatMin(b.timeToEmptyMin))" }
+        return "使用電池"
+    }
+
+    private func formatMin(_ m: Int) -> String {
+        if m < 60 { return "\(m) 分" }
+        return "\(m / 60) 時 \(m % 60) 分"
+    }
+}
+
+// MARK: - 新增子視圖
+
+struct VolumeRow: View {
+    let vol: VolumeUsage
+    let ratioColor: (Double) -> Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(vol.id)
+                    .font(.system(size: 9))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Text("\(formatBytes(vol.used)) / \(formatBytes(vol.total))")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+            ProgressView(value: vol.ratio, total: 1.0)
+                .tint(ratioColor(vol.ratio))
+                .scaleEffect(x: 1, y: 0.6)
+        }
+    }
+}
+
+struct ProcessRowView: View {
+    let row: ProcessRow
+    let mode: ContentView.TopMode
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(row.name)
+                .font(.system(size: 10))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer()
+            Text(valueText)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .monospacedDigit()
+        }
+    }
+
+    private var valueText: String {
+        switch mode {
+        case .cpu:    return String(format: "%.1f%%", row.cpuPercent)
+        case .memory: return formatBytes(row.residentBytes)
+        }
     }
 }
 
