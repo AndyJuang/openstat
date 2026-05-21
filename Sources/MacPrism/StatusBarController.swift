@@ -123,7 +123,7 @@ class StatusBarController: NSObject, NSMenuDelegate {
 
         // 全部關閉且無走勢圖時退回顯示圖示，避免 menu bar 變空白
         if parts.isEmpty && graph == nil {
-            statusItem.button?.image = NSImage(systemSymbolName: "gauge.medium", accessibilityDescription: "OpenStat")
+            statusItem.button?.image = NSImage(systemSymbolName: "gauge.medium", accessibilityDescription: "MacPrism")
             statusItem.button?.title = ""
         } else {
             statusItem.button?.image = graph
@@ -196,7 +196,7 @@ class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(loginItem)
 
         menu.addItem(.separator())
-        menu.addItem(withTitle: "結束 OpenStat", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "結束 MacPrism", action: #selector(quit), keyEquivalent: "q")
 
         menu.delegate  = self
         statusItem.menu = menu

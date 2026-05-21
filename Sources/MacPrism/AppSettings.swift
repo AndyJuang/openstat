@@ -82,12 +82,12 @@ final class AppSettings: ObservableObject {
     }
 
     private enum Keys {
-        static let menuBar      = "openstat.settings.menuBarItems"
-        static let panelOrder   = "openstat.settings.panelOrder"
-        static let panelEnabled = "openstat.settings.panelEnabled"
-        static let legacyPanel  = "openstat.settings.panelItems"  // 舊版鍵
-        static let tokenSource  = "openstat.settings.tokenMenuBarSource"
-        static let menuBarGraph = "openstat.settings.menuBarShowGraph"
+        static let menuBar      = "macprism.settings.menuBarItems"
+        static let panelOrder   = "macprism.settings.panelOrder"
+        static let panelEnabled = "macprism.settings.panelEnabled"
+        static let legacyPanel  = "macprism.settings.panelItems"  // 舊版鍵
+        static let tokenSource  = "macprism.settings.tokenMenuBarSource"
+        static let menuBarGraph = "macprism.settings.menuBarShowGraph"
     }
 
     /// 預設：menu bar 顯示 CPU / 記憶體 / 網路 / 電池；面板依 allCases 順序、全部啟用

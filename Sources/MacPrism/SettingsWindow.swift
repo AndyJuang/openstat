@@ -119,7 +119,7 @@ final class SettingsWindowController: NSWindowController {
     convenience init(settings: AppSettings) {
         let host = NSHostingController(rootView: SettingsView(settings: settings))
         let window = NSWindow(contentViewController: host)
-        window.title = "OpenStat 設定"
+        window.title = "MacPrism 設定"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.setContentSize(NSSize(width: 380, height: 420))

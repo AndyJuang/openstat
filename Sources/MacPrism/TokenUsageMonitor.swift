@@ -123,7 +123,7 @@ final class TokenUsageMonitor: ObservableObject {
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        req.setValue("openstat", forHTTPHeaderField: "User-Agent")
+        req.setValue("macprism", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 15
 
         do {

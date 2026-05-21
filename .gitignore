@@ -1,8 +1,10 @@
 .build/
 *.o
 *.d
-OpenStat.app/
+MacPrism.app/
 Assets/AppIcon.iconset/
 *.icns
 .DS_Store
+MacPrism-*.dmg
 OpenStat-*.dmg
+.claude/

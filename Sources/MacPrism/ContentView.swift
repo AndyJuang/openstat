@@ -65,7 +65,7 @@ struct ContentView: View {
         HStack {
             Image(systemName: "gauge.medium")
                 .foregroundColor(.accentColor)
-            Text("OpenStat")
+            Text("MacPrism")
                 .font(.headline)
             Spacer()
             Button("結束") { NSApplication.shared.terminate(nil) }

@@ -1,6 +1,6 @@
 import Foundation
 import Darwin
-import OpenStatC
+import MacPrismC
 
 struct VolumeUsage: Identifiable {
     let id: String          // mount point

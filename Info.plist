@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>OpenStat</string>
+    <string>MacPrism</string>
     <key>CFBundleIdentifier</key>
-    <string>com.openstat.app</string>
+    <string>com.macprism.app</string>
     <key>CFBundleName</key>
-    <string>OpenStat</string>
+    <string>MacPrism</string>
     <key>CFBundleVersion</key>
     <string>1.7</string>
     <key>CFBundleShortVersionString</key>

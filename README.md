@@ -1,7 +1,7 @@
-# OpenStat
+# MacPrism
 
 <p align="center">
-  <img src="Assets/icon.png" width="128" alt="OpenStat icon">
+  <img src="Assets/icon.png" width="128" alt="MacPrism icon">
 </p>
 
 <p align="center">
@@ -11,8 +11,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/macOS-13%2B-blue?logo=apple" alt="macOS 13+">
   <img src="https://img.shields.io/badge/Swift-5.9-orange?logo=swift" alt="Swift 5.9">
-  <img src="https://img.shields.io/github/license/AndyJuang/openstat" alt="MIT License">
-  <img src="https://img.shields.io/github/v/release/AndyJuang/openstat" alt="Latest release">
+  <img src="https://img.shields.io/github/license/AndyJuang/macprism" alt="MIT License">
+  <img src="https://img.shields.io/github/v/release/AndyJuang/macprism" alt="Latest release">
 </p>
 
 ---
@@ -46,7 +46,7 @@
 
 ### 下載（推薦）
 
-前往 [Releases](https://github.com/AndyJuang/openstat/releases/latest) 下載 `OpenStat.dmg`，掛載後將 **OpenStat.app** 拖入 Applications 資料夾。
+前往 [Releases](https://github.com/AndyJuang/macprism/releases/latest) 下載 `MacPrism.dmg`，掛載後將 **MacPrism.app** 拖入 Applications 資料夾。
 
 > **首次開啟：** macOS 可能顯示「無法驗證開發者」，請至  
 > **系統設定 → 隱私權與安全性 → 仍要開啟**。
@@ -56,10 +56,10 @@
 **環境需求：** Xcode Command Line Tools、Swift 5.9+
 
 ```bash
-git clone https://github.com/AndyJuang/openstat.git
-cd openstat
-make app          # 建置並打包成 OpenStat.app
-open OpenStat.app
+git clone https://github.com/AndyJuang/macprism.git
+cd macprism
+make app          # 建置並打包成 MacPrism.app
+open MacPrism.app
 ```
 
 其他指令：
@@ -80,16 +80,16 @@ make clean  # 清除 build 產物
 ## 技術架構
 
 ```
-openstat/
+macprism/
 ├── Sources/
-│   ├── OpenStatC/          # C 層：IOKit / libproc / getifaddrs
+│   ├── MacPrismC/          # C 層：IOKit / libproc / getifaddrs
 │   │   ├── include/{Network,Disk,GPU,Battery,Process}Helper.h
 │   │   ├── NetworkHelper.c
 │   │   ├── DiskHelper.c
 │   │   ├── GPUHelper.c
 │   │   ├── BatteryHelper.c
 │   │   └── ProcessHelper.c
-│   └── OpenStat/           # Swift 主程式
+│   └── MacPrism/           # Swift 主程式
 │       ├── main.swift
 │       ├── AppDelegate.swift
 │       ├── StatusBarController.swift   # menu bar + 右鍵選單 + 顯示偏好

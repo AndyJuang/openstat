@@ -2,18 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "OpenStat",
+    name: "MacPrism",
     platforms: [.macOS(.v13)],
     targets: [
         .target(
-            name: "OpenStatC",
-            path: "Sources/OpenStatC",
+            name: "MacPrismC",
+            path: "Sources/MacPrismC",
             publicHeadersPath: "include"
         ),
         .executableTarget(
-            name: "OpenStat",
-            dependencies: ["OpenStatC"],
-            path: "Sources/OpenStat",
+            name: "MacPrism",
+            dependencies: ["MacPrismC"],
+            path: "Sources/MacPrism",
             linkerSettings: [
                 .linkedFramework("IOKit"),
                 .linkedFramework("CoreFoundation"),
