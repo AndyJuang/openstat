@@ -28,6 +28,7 @@
 | **磁碟** | 全系統讀寫速率（`IOBlockStorageDriver`）+ 各掛載點容量（`getmntinfo`） |
 | **電池** | 電量百分比、充電狀態、瞬時功率（W）、循環次數（`IOPowerSources` + `AppleSmartBattery`） |
 | **Top Process** | CPU / 記憶體 Top 5 排行（`libproc`），詳細面板可切換 |
+| **AI 額度** | Claude Code / Codex 目前 5 小時視窗剩餘額度、重置倒數與每週用量 |
 | **固定寬度** | 等寬字型（SF Mono），數值更新不會讓 menu bar 跳動 |
 | **登入自動啟動** | 右鍵選單一鍵切換，使用 `SMAppService` |
 | **Menu Bar 自訂** | 右鍵 → Menu Bar 顯示，可開關 GPU / 磁碟 I/O / 電量 |
@@ -89,7 +90,8 @@ openstat/
 │       ├── main.swift
 │       ├── AppDelegate.swift
 │       ├── StatusBarController.swift   # menu bar + 右鍵選單 + 顯示偏好
-│       ├── SystemMonitor.swift         # 七大指標的資料蒐集與發佈
+│       ├── SystemMonitor.swift         # 系統指標的資料蒐集與發佈
+│       ├── TokenUsageMonitor.swift     # AI 額度（Claude / Codex）資料來源
 │       └── ContentView.swift           # SwiftUI 面板 UI
 ├── Assets/
 │   └── make_icon.swift     # Icon 產生腳本（AppKit 繪製）
@@ -111,6 +113,8 @@ openstat/
 **電池監控：** `IOPSCopyPowerSourcesInfo` 取電量／時間／充電狀態；`AppleSmartBattery` IORegistry 取 `Amperage` × `Voltage` 計算瞬時功率（W）。
 
 **Top Process：** `proc_listpids` + `proc_pidinfo(PROC_PIDTASKINFO)` 取得各行程 CPU 累計時間與 RSS，依兩次取樣 delta 算出 CPU%。
+
+**AI 額度：** Codex 直接讀 `~/.codex/sessions` 最新 rollout 檔內建的 rate-limit 快照（完全離線）；Claude Code 本機無此資料，改呼叫 `api.anthropic.com/api/oauth/usage`，OAuth 憑證取自 Keychain。兩者皆聚焦「目前 5 小時滾動視窗」，每 60 秒刷新（Claude API 內部節流至 5 分鐘）。
 
 ## 系統需求
 

@@ -11,7 +11,7 @@ struct SettingsView: View {
             panelTab
                 .tabItem { Label("下拉面板", systemImage: "rectangle.expand.vertical") }
         }
-        .frame(width: 380, height: 360)
+        .frame(width: 380, height: 420)
         .padding()
     }
 
@@ -34,21 +34,42 @@ struct SettingsView: View {
     }
 
     private var panelTab: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("勾選要顯示在下拉面板的區塊")
+        VStack(alignment: .leading, spacing: 8) {
+            Text("拖曳調整順序,勾選控制顯示")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            ForEach(StatItem.allCases) { item in
-                Toggle(isOn: binding(for: item, in: \.panelItems)) {
-                    Label(item.label, systemImage: item.icon)
+            List {
+                ForEach(settings.panelOrder, id: \.self) { item in
+                    HStack {
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundColor(.secondary)
+                        Toggle(isOn: panelEnabledBinding(for: item)) {
+                            Label(item.label, systemImage: item.icon)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
                 }
-                .toggleStyle(.checkbox)
+                .onMove { source, destination in
+                    settings.movePanelItem(from: source, to: destination)
+                }
             }
+            .listStyle(.inset)
+            .frame(minHeight: 240)
 
-            Spacer()
             footer
         }
+    }
+
+    private func panelEnabledBinding(for item: StatItem) -> Binding<Bool> {
+        Binding(
+            get: { settings.panelEnabled.contains(item) },
+            set: { isOn in
+                var s = settings.panelEnabled
+                if isOn { s.insert(item) } else { s.remove(item) }
+                settings.panelEnabled = s
+            }
+        )
     }
 
     private var footer: some View {
@@ -81,7 +102,7 @@ final class SettingsWindowController: NSWindowController {
         window.title = "OpenStat 設定"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 380, height: 360))
+        window.setContentSize(NSSize(width: 380, height: 420))
         window.center()
         self.init(window: window)
     }

@@ -7,8 +7,10 @@ class StatusBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem
     private var popover: NSPopover
     private let monitor: SystemMonitor
+    private let tokenMonitor = TokenUsageMonitor()
     private let settings = AppSettings.shared
     private var timer: Timer?
+    private var tokenTimer: Timer?
     private var eventMonitor: Any?
     private var settingsWindow: SettingsWindowController?
     private var cancellables: Set<AnyCancellable> = []
@@ -35,7 +37,7 @@ class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     private func setupPopover() {
-        let content = NSHostingController(rootView: ContentView(monitor: monitor, settings: settings))
+        let content = NSHostingController(rootView: ContentView(monitor: monitor, tokenMonitor: tokenMonitor, settings: settings))
         content.view.frame = NSRect(x: 0, y: 0, width: 320, height: 520)
 
         popover.contentViewController = content
@@ -46,10 +48,17 @@ class StatusBarController: NSObject, NSMenuDelegate {
 
     private func startMonitoring() {
         monitor.update()
+        tokenMonitor.refresh(force: true)
         refreshStatusBar()
 
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             self?.monitor.update()
+            self?.refreshStatusBar()
+        }
+
+        // AI 額度更新較慢，獨立用 60 秒節奏刷新（Claude API 內部再節流到 5 分鐘）
+        tokenTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.tokenMonitor.refresh()
             self?.refreshStatusBar()
         }
     }
@@ -86,6 +95,9 @@ class StatusBarController: NSObject, NSMenuDelegate {
         if items.contains(.battery) && monitor.battery.present {
             parts.append("\(monitor.battery.percent)%" + (monitor.battery.isCharging ? "⚡" : ""))
         }
+        if items.contains(.tokenUsage), let remaining = tokenMonitor.lowestRemaining {
+            parts.append("AI" + String(format: "%3.0f%%", remaining))
+        }
 
         // 全部關閉時退回顯示圖示，避免 menu bar 變空白
         if parts.isEmpty {
@@ -107,6 +119,7 @@ class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     private func openPopover(_ sender: NSStatusBarButton) {
+        tokenMonitor.refresh()
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             self?.closePopover()

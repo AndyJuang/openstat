@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var monitor: SystemMonitor
+    @ObservedObject var tokenMonitor: TokenUsageMonitor
     @ObservedObject var settings: AppSettings
     @State private var topMode: TopMode = .cpu
 
@@ -13,19 +14,31 @@ struct ContentView: View {
             Divider()
             ScrollView {
                 VStack(spacing: 10) {
-                    if settings.panelItems.contains(.cpu)     { cpuSection }
-                    if settings.panelItems.contains(.memory)  { memorySection }
-                    if settings.panelItems.contains(.gpu) && monitor.gpuAvailable { gpuSection }
-                    if settings.panelItems.contains(.network) { networkSection }
-                    if settings.panelItems.contains(.disk)    { diskSection }
-                    if settings.panelItems.contains(.battery) && monitor.battery.present { batterySection }
-                    if settings.panelItems.contains(.topProcess) { topProcessSection }
-                    if settings.panelItems.isEmpty { emptyState }
+                    ForEach(settings.panelOrder, id: \.self) { item in
+                        if settings.panelEnabled.contains(item) {
+                            section(for: item)
+                        }
+                    }
+                    if settings.panelEnabled.isEmpty { emptyState }
                 }
                 .padding(12)
             }
         }
         .frame(width: 320, height: 520)
+    }
+
+    @ViewBuilder
+    private func section(for item: StatItem) -> some View {
+        switch item {
+        case .cpu:        cpuSection
+        case .memory:     memorySection
+        case .gpu:        if monitor.gpuAvailable { gpuSection }
+        case .network:    networkSection
+        case .disk:       diskSection
+        case .battery:    if monitor.battery.present { batterySection }
+        case .topProcess: topProcessSection
+        case .tokenUsage: tokenUsageSection
+        }
     }
 
     private var emptyState: some View {
@@ -244,6 +257,21 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - AI 額度
+
+    private var tokenUsageSection: some View {
+        StatCard(title: "AI 額度", icon: "speedometer") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("目前 5 小時視窗剩餘額度")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                CLIUsageRow(usage: tokenMonitor.claude)
+                Divider()
+                CLIUsageRow(usage: tokenMonitor.codex)
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func usageColor(_ v: Double, high: Double, mid: Double) -> Color {
@@ -339,6 +367,68 @@ struct ProcessRowView: View {
         case .cpu:    return String(format: "%.1f%%", row.cpuPercent)
         case .memory: return formatBytes(row.residentBytes)
         }
+    }
+}
+
+/// 單一 AI CLI 的配額列：名稱、剩餘百分比、進度條、重置倒數
+struct CLIUsageRow: View {
+    let usage: CLIUsage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(usage.name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Spacer()
+                if usage.available {
+                    Text("剩 \(Int(usage.remainingPercent.rounded()))%")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundColor(remainColor)
+                } else {
+                    Text(usage.status)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+            }
+            if usage.available {
+                ProgressView(value: min(usage.usedPercent, 100), total: 100)
+                    .tint(remainColor)
+                HStack {
+                    Text(resetText)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if let week = usage.weekUsedPercent {
+                        Text("本週已用 \(Int(week.rounded()))%")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            }
+        }
+    }
+
+    /// 剩餘越少越紅
+    private var remainColor: Color {
+        let r = usage.remainingPercent
+        return r < 15 ? .red : r < 40 ? .orange : .green
+    }
+
+    private var resetText: String {
+        guard let minutes = usage.minutesToReset else { return "重置時間未知" }
+        if minutes <= 0 { return "即將重置" }
+        let hours = minutes / 60
+        let mins  = minutes % 60
+        let dur = hours > 0 ? "\(hours) 時 \(mins) 分" : "\(mins) 分"
+        if let reset = usage.resetAt {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+            return "\(formatter.string(from: reset)) 重置 · 還有 \(dur)"
+        }
+        return "還有 \(dur) 重置"
     }
 }
 

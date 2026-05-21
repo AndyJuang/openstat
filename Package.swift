@@ -16,7 +16,8 @@ let package = Package(
             path: "Sources/OpenStat",
             linkerSettings: [
                 .linkedFramework("IOKit"),
-                .linkedFramework("CoreFoundation")
+                .linkedFramework("CoreFoundation"),
+                .linkedFramework("Security")
             ]
         )
     ]
