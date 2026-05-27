@@ -654,18 +654,29 @@ struct CLIUsageRow: View {
             }
             if usage.available {
                 MetricBar(value: min(usage.usedPercent, 100) / 100, fill: remainFill)
-                HStack {
-                    Text(resetText)
+                Text(resetText)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                if let weekRemain = usage.weekRemainingPercent,
+                   let weekUsed = usage.weekUsedPercent {
+                    HStack {
+                        Text("本週（7 天）")
+                            .font(.system(size: 12))
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text("剩 \(Int(weekRemain.rounded()))%")
+                            .font(.system(size: 12))
+                            .monospacedDigit()
+                            .foregroundColor(weekRemainColor)
+                    }
+                    .padding(.top, 2)
+                    MetricBar(value: min(weekUsed, 100) / 100, fill: weekRemainFill)
+                    Text(weekResetText)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
-                    Spacer()
-                    if let week = usage.weekUsedPercent {
-                        Text("本週已用 \(Int(week.rounded()))%")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                    }
                 }
+
                 Text(usage.status)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
@@ -681,6 +692,13 @@ struct CLIUsageRow: View {
     private var remainColor: Color { theme.color(remainSeverity) }
     private var remainFill: AnyShapeStyle { theme.fill(remainSeverity) }
 
+    private var weekRemainSeverity: Severity {
+        let r = usage.weekRemainingPercent ?? 100
+        return r < 15 ? .high : r < 40 ? .warn : .ok
+    }
+    private var weekRemainColor: Color { theme.color(weekRemainSeverity) }
+    private var weekRemainFill: AnyShapeStyle { theme.fill(weekRemainSeverity) }
+
     private var resetText: String {
         guard let minutes = usage.minutesToReset else { return "重置時間未知" }
         if minutes <= 0 { return "即將重置" }
@@ -690,6 +708,29 @@ struct CLIUsageRow: View {
         if let reset = usage.resetAt {
             let formatter = DateFormatter()
             formatter.dateFormat = "HH:mm"
+            return "\(formatter.string(from: reset)) 重置 · 還有 \(dur)"
+        }
+        return "還有 \(dur) 重置"
+    }
+
+    private var weekResetText: String {
+        guard let minutes = usage.minutesToWeekReset else { return "週重置時間未知" }
+        if minutes <= 0 { return "即將重置" }
+        let days  = minutes / (60 * 24)
+        let hours = (minutes % (60 * 24)) / 60
+        let mins  = minutes % 60
+        let dur: String
+        if days > 0 {
+            dur = hours > 0 ? "\(days) 天 \(hours) 時" : "\(days) 天"
+        } else if hours > 0 {
+            dur = "\(hours) 時 \(mins) 分"
+        } else {
+            dur = "\(mins) 分"
+        }
+        if let reset = usage.weekResetAt {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_TW")
+            formatter.dateFormat = days > 0 ? "M/d HH:mm" : "HH:mm"
             return "\(formatter.string(from: reset)) 重置 · 還有 \(dur)"
         }
         return "還有 \(dur) 重置"

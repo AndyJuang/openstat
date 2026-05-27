@@ -8,14 +8,28 @@ struct CLIUsage {
     var usedPercent: Double = 0          // 5 小時視窗已用百分比
     var resetAt: Date? = nil             // 5 小時視窗重置時間點
     var weekUsedPercent: Double? = nil   // 每週視窗已用百分比
+    var weekResetAt: Date? = nil         // 每週視窗重置時間點
     var status: String = "讀取中…"        // 顯示用狀態 / 錯誤訊息
 
     /// 5 小時視窗剩餘百分比
     var remainingPercent: Double { max(0, 100 - usedPercent) }
 
+    /// 每週視窗剩餘百分比；nil 表示無週配額資料
+    var weekRemainingPercent: Double? {
+        guard let used = weekUsedPercent else { return nil }
+        return max(0, 100 - used)
+    }
+
     /// 距離重置還有幾分鐘；nil = 未知，0 = 即將重置
     var minutesToReset: Int? {
         guard let r = resetAt else { return nil }
+        let secs = r.timeIntervalSinceNow
+        return secs > 0 ? Int((secs / 60).rounded()) : 0
+    }
+
+    /// 距離週重置還有幾分鐘；nil = 未知，0 = 即將重置
+    var minutesToWeekReset: Int? {
+        guard let r = weekResetAt else { return nil }
         let secs = r.timeIntervalSinceNow
         return secs > 0 ? Int((secs / 60).rounded()) : 0
     }
@@ -105,6 +119,7 @@ final class TokenUsageMonitor: ObservableObject {
         u.resetAt = parseReset(fiveHour["resets_at"])
         if let sevenDay = rateLimits["seven_day"] as? [String: Any] {
             u.weekUsedPercent = num(sevenDay["used_percentage"]) ?? num(sevenDay["utilization"])
+            u.weekResetAt = parseReset(sevenDay["resets_at"])
         }
         u.available = true
         u.status = capturedAt.map { "本機快照 · \(relativeTime($0))" } ?? "本機快照"
@@ -145,6 +160,7 @@ final class TokenUsageMonitor: ObservableObject {
             }
             if let sevenDay = json["seven_day"] as? [String: Any] {
                 u.weekUsedPercent = num(sevenDay["utilization"])
+                u.weekResetAt = parseReset(sevenDay["resets_at"])
             }
             u.available = true
             u.status = "API · 已更新"
@@ -205,6 +221,7 @@ final class TokenUsageMonitor: ObservableObject {
             }
             if let secondary = rateLimits["secondary"] as? [String: Any] {
                 u.weekUsedPercent = num(secondary["used_percent"])
+                u.weekResetAt = parseReset(secondary["resets_at"])
             }
             u.available = true
             u.status = "本機 session 檔"
